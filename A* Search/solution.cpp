@@ -26,27 +26,157 @@ const vector<pair<int, int>> DIRS = {
 };
 
 
-int manhattanDistance(const vector<vector<int>>& board,
-                      const vector<vector<int>>& goal) {
+int hamming_distance(vector<vector<int>>& board,
+                     vector<vector<int>>& goal) {
     int n = board.size();
-    vector<pair<int,int>> goalPos(n * n);
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++)
-            goalPos[goal[i][j]] = {i, j};
+    int dist = 0;
+
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            if (board[i][j] != 0 && board[i][j] != goal[i][j]) {
+                dist++;
+            }
+        }
+    }
+    return dist;
+}
+
+
+int manhattan_distance(vector<vector<int>> &board,
+                       vector<vector<int>> &goal) {
+    int n = board.size();
+    vector<pair<int,int>> goal_position(n * n);
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            goal_position[goal[i][j]] = {i, j};
+        }
+    }
 
     int dist = 0;
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++) {
             int tile = board[i][j];
             if (tile == 0) continue;
-            auto [gi, gj] = goalPos[tile];
+            auto [gi, gj] = goal_position[tile];
             dist += abs(i - gi) + abs(j - gj);
         }
     return dist;
 }
 
-int heuristic(vector<vector<int>> grid,const vector<vector<int>> &goal) {
-    return manhattanDistance(grid, goal);
+
+double euclidean_distance(vector<vector<int>>& board,
+                          vector<vector<int>>& goal) {
+    int n = board.size();
+    vector<pair<int,int>> goal_position(n * n);
+
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+            goal_position[goal[i][j]] = {i, j};
+
+    double dist = 0.0;
+
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) {
+            int tile = board[i][j];
+            if (tile == 0) continue;
+
+            auto [gi, gj] = goal_position[tile];
+            dist += sqrt((i - gi) * (i - gi) + (j - gj) * (j - gj));
+        }
+
+    return dist;
+}
+
+int linear_conflict(vector<vector<int>>& board,
+                    vector<vector<int>>& goal) {
+    int n = board.size();
+
+    vector<pair<int,int>> goal_position(n * n);
+
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            goal_position[goal[i][j]] = {i, j}; 
+        }
+    }
+
+    int conflicts = 0;
+
+    // Row conflicts
+    for (int row = 0; row < n; row++) {
+        for (int i = 0; i < n; i++) {
+            int tile1 = board[row][i];
+            if (tile1 == 0) continue;
+
+            auto [r1, c1] = goal_position[tile1];
+            if (r1 != row) continue;
+
+            for (int j = i + 1; j < n; j++) {
+                int tile2 = board[row][j];
+                if (tile2 == 0) continue;
+
+                auto [r2, c2] = goal_position[tile2];
+                if (r2 != row) continue;
+
+                if (c1 > c2)
+                    conflicts++;
+            }
+        }
+    }
+
+    // Column conflicts
+    for (int col = 0; col < n; col++) {
+        for (int i = 0; i < n; i++) {
+            int tile1 = board[i][col];
+            if (tile1 == 0) continue;
+
+            auto [r1, c1] = goal_position[tile1];
+            if (c1 != col) continue;
+
+            for (int j = i + 1; j < n; j++) {
+                int tile2 = board[j][col];
+                if (tile2 == 0) continue;
+
+                auto [r2, c2] = goal_position[tile2];
+                if (c2 != col) continue;
+
+                if (r1 > r2)
+                    conflicts++;
+            }
+        }
+    }
+
+    return manhattan_distance(board, goal) + 2 * conflicts;
+}
+
+
+int custom_heuristic(vector<vector<int>>& board,
+                     vector<vector<int>>& goal) {
+
+    int n = board.size();
+    int h = manhattan_distance(board, goal);
+
+    // Four corners
+    vector<pair<int,int>> corners = {
+        {0, 0},
+        {0, n - 1},
+        {n - 1, 0},
+        {n - 1, n - 1}
+    };
+
+    for (auto [i, j] : corners) {
+        if (goal[i][j] == 0) continue;       
+        if (board[i][j] != goal[i][j]) {
+            h++;
+        }
+    }
+
+    return h;
+}
+
+
+
+int heuristic(vector<vector<int>> grid, vector<vector<int>> &goal) {
+    return custom_heuristic(grid, goal);
 }
 
 
@@ -119,7 +249,9 @@ bool is_solvable(vector<vector<int>> &grid) {
     }
 }
 
-int main () {
+int main (int argc, char* argv[]) {
+
+    freopen(argv[1], "r", stdin);
 
     // take input 
     int n; cin >> n;
@@ -139,19 +271,19 @@ int main () {
     unordered_set<string> closed_list;
     list<node> node_pool;
 
-    node_pool.push_back({grid, 0, 0, nullptr});
+    node_pool.push_back({grid, 0, 0, nullptr});  // node_pool so that pointers of nodes don't get disappeared. (grid, move_count, priority_value, parent)
     open_list.push(&node_pool.back());
     auto goal = build_goal(n);
 
     while (!open_list.empty()) {
 
-        node* current_node = open_list.top(); open_list.pop();
+        node* current_node = open_list.top(); open_list.pop(); // Remove the node with the lowest priority value
 
         string key = make_key(current_node->grid);
-        if (closed_list.count(key)) continue;
-        closed_list.insert(key);
+        if (closed_list.count(key)) continue; // check whether it is already in closed_list 
+        closed_list.insert(key); // Add it to the closed list.
 
-        int x = -1, y;
+        int x = -1, y; // position of empty grid
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < n; j++) {
                 if (current_node->grid[i][j] == 0) {
@@ -166,11 +298,11 @@ int main () {
             if (x + dx >= n || x + dx < 0 || y + dy >= n || y + dy < 0) continue;
             
             auto new_grid = current_node->grid;
-            swap(new_grid[x][y], new_grid[x + dx][y + dy]);
+            swap(new_grid[x][y], new_grid[x + dx][y + dy]); // Generate all valid neighboring board configurations
 
-            if (closed_list.count(make_key(new_grid))) continue;
+            if (closed_list.count(make_key(new_grid))) continue; // For each neighbor not in the closed list, insert it into the priority queue.
 
-            if (current_node->grid == goal) {
+            if (current_node->grid == goal) { // if this node is goal node, print the hierarchy 
                 vector<vector<vector<int>>> path;
                 for (node* ptr = current_node; ptr != nullptr; ptr = ptr->parent) {
                     path.push_back(ptr->grid);
