@@ -8,6 +8,11 @@
 
 using namespace std;
 
+
+enum class Heuristic { HAMMING, MANHATTAN, EUCLIDEAN, LINEAR_CONFLICT, CUSTOM };
+Heuristic current_heuristic = Heuristic::LINEAR_CONFLICT; 
+
+
 struct node {
     vector<vector<int>> grid;
     int move_count, priority_value;
@@ -176,7 +181,14 @@ int custom_heuristic(vector<vector<int>>& board,
 
 
 int heuristic(vector<vector<int>> grid, vector<vector<int>> &goal) {
-    return custom_heuristic(grid, goal);
+    switch (current_heuristic) {
+        case Heuristic::HAMMING:         return hamming_distance(grid, goal);
+        case Heuristic::MANHATTAN:       return manhattan_distance(grid, goal);
+        case Heuristic::EUCLIDEAN:       return (int) round(euclidean_distance(grid, goal));
+        case Heuristic::LINEAR_CONFLICT: return linear_conflict(grid, goal);
+        case Heuristic::CUSTOM:          return custom_heuristic(grid, goal);
+    }
+    return 0;
 }
 
 
@@ -252,6 +264,21 @@ bool is_solvable(vector<vector<int>> &grid) {
 int main (int argc, char* argv[]) {
 
     freopen(argv[1], "r", stdin);
+
+
+    if (argc > 2) {
+        string h = argv[2];
+        if (h == "hamming")          current_heuristic = Heuristic::HAMMING;
+        else if (h == "manhattan")   current_heuristic = Heuristic::MANHATTAN;
+        else if (h == "euclidean")   current_heuristic = Heuristic::EUCLIDEAN;
+        else if (h == "linear_conflict") current_heuristic = Heuristic::LINEAR_CONFLICT;
+        else if (h == "custom")      current_heuristic = Heuristic::CUSTOM;
+        else {
+            cerr << "Unknown heuristic\n";
+            return 1;
+        }
+    }
+
 
     // take input 
     int n; cin >> n;
