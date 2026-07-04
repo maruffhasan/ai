@@ -5,6 +5,7 @@
 #include<unordered_set>
 #include<list>
 #include<algorithm>
+#include<chrono>
 
 using namespace std;
 
@@ -261,7 +262,7 @@ bool is_solvable(vector<vector<int>> &grid) {
     }
 }
 
-int main (int argc, char* argv[]) {
+int main (int argc, char* argv[]) { 
 
     freopen(argv[1], "r", stdin);
 
@@ -302,6 +303,11 @@ int main (int argc, char* argv[]) {
     open_list.push(&node_pool.back());
     auto goal = build_goal(n);
 
+
+    long long nodes_expanded = 0;
+    auto t_start = chrono::high_resolution_clock::now();
+
+
     while (!open_list.empty()) {
 
         node* current_node = open_list.top(); open_list.pop(); // Remove the node with the lowest priority value
@@ -309,6 +315,30 @@ int main (int argc, char* argv[]) {
         string key = make_key(current_node->grid);
         if (closed_list.count(key)) continue; // check whether it is already in closed_list 
         closed_list.insert(key); // Add it to the closed list.
+
+        nodes_expanded++;
+
+
+        if (current_node->grid == goal) { // if this node is goal node, print the hierarchy 
+            auto t_end = chrono::high_resolution_clock::now();
+            double ms = chrono::duration<double, milli>(t_end - t_start).count();
+            cout << "SOLVED cost=" << current_node->move_count
+                 << " nodes_expanded=" << nodes_expanded
+                 << " time_ms=" << ms << "\n";
+
+
+            vector<vector<vector<int>>> path;
+            for (node* ptr = current_node; ptr != nullptr; ptr = ptr->parent) {
+                path.push_back(ptr->grid);
+            }
+            reverse(path.begin(), path.end());
+
+            cout << "\nMinimum number of moves = " << path.size() - 1 << "\n\n";
+            for (auto grid : path) {
+                print_grid(grid);
+            }
+            return 0;
+        }
 
         int x = -1, y; // position of empty grid
         for (int i = 0; i < n; i++) {
@@ -328,20 +358,6 @@ int main (int argc, char* argv[]) {
             swap(new_grid[x][y], new_grid[x + dx][y + dy]); // Generate all valid neighboring board configurations
 
             if (closed_list.count(make_key(new_grid))) continue; // For each neighbor not in the closed list, insert it into the priority queue.
-
-            if (current_node->grid == goal) { // if this node is goal node, print the hierarchy 
-                vector<vector<vector<int>>> path;
-                for (node* ptr = current_node; ptr != nullptr; ptr = ptr->parent) {
-                    path.push_back(ptr->grid);
-                }
-                reverse(path.begin(), path.end());
-
-                cout << "\nMinimum number of moves = " << path.size() - 1 << "\n\n";
-                for (auto grid : path) {
-                    print_grid(grid);
-                }
-                return 0;
-            }
 
             int priority_value = current_node->move_count + heuristic(new_grid, goal);
 
