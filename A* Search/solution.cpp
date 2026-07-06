@@ -266,6 +266,7 @@ int main (int argc, char* argv[]) {
 
     freopen(argv[1], "r", stdin);
 
+    double W = 1.0;
 
     if (argc > 2) {
         string h = argv[2];
@@ -278,6 +279,7 @@ int main (int argc, char* argv[]) {
             cerr << "Unknown heuristic\n";
             return 1;
         }
+        if (argc > 3) W = atof(argv[3]);
     }
 
 
@@ -359,7 +361,7 @@ int main (int argc, char* argv[]) {
 
             if (closed_list.count(make_key(new_grid))) continue; // For each neighbor not in the closed list, insert it into the priority queue.
 
-            int priority_value = current_node->move_count + heuristic(new_grid, goal);
+            int priority_value = current_node->move_count + W * heuristic(new_grid, goal);
 
             node_pool.push_back({new_grid, current_node->move_count + 1, priority_value, current_node});
             open_list.push(&node_pool.back());
