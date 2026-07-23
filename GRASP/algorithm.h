@@ -10,8 +10,8 @@ using Partition = vector<int>;
 */
 
 struct Graph {
-    int n = 0;                 
-    int m = 0;             
+    int n = 0;
+    int m = 0;
     vector<vector<pair<int,int>>> adj; 
 
     void load(const string &path) {
@@ -41,8 +41,7 @@ pair<Partition, int> localSearch(const Graph &g, Partition part);
 long long cutWeight(const Graph &g, const Partition &part) {
     long long total = 0;
     for (int u = 1; u <= g.n; u++) {
-        for (auto &pr : g.adj[u]) {
-            int v = pr.first, w = pr.second;
+        for (auto [v, w] : g.adj[u]) {
             if (u < v && part[u] != part[v]) total += w;
         }
     }
@@ -55,7 +54,6 @@ Partition randomPartition(const Graph &g, mt19937 &prng) {
     for (int v = 1; v <= g.n; v++) part[v] = coin(prng);
     return part;
 }
-
 
 
 // GRASP
@@ -74,8 +72,7 @@ pair<long long, int> grasp(const Graph &g, int maxIterations, double alpha, mt19
     }
     return {best, itCounts / maxIterations};
 }
-
-
+ 
 
 // Randomized Heuristic
 double randomizedMaxCut(const Graph &g, int runs, mt19937 &prng) {

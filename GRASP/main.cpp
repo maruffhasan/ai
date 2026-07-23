@@ -7,10 +7,11 @@ using namespace std;
 namespace fs = filesystem;
 
 // tunable defaults
-static const int RANDOM_RUNS      = 30;   
-static const int LOCAL_ITERS      = 30;   
-static const int GRASP_ITERS      = 60;   
-static const double SEMI_ALPHA    = 0.5; 
+static const int RANDOMIZED_RUNS            = 100;   
+static const double ALPHA                   = 0.6; 
+static const int LOCAL_SEARCH_RESTARTS      = 5;   
+static const int GRASP_ITERATIONS           = 25;   
+static const int SEED                       = 42;
 
 map<string, long long> knownBest = {
     {"g1", 12078}, {"g2", 12084}, {"g3", 12077},
@@ -46,27 +47,27 @@ RowResult runAll(const string &path, const string &name, mt19937 &prng) {
     r.n = g.n;
     r.m = g.m;
 
-    r.randomizedAvg = randomizedMaxCut(g, RANDOM_RUNS, prng);
+    r.randomizedAvg = randomizedMaxCut(g, RANDOMIZED_RUNS, prng);
 
     Partition gp = greedyConstruct(g);
     r.greedyVal = cutWeight(g, gp);
 
-    Partition sgp = semiGreedyConstruct(g, SEMI_ALPHA, prng);
+    Partition sgp = semiGreedyConstruct(g, ALPHA, prng);
     r.semiGreedyVal = cutWeight(g, sgp);
 
     
 
     long long sumLocal = 0, itCounts = 0;
-    for (int i = 0; i < LOCAL_ITERS; i++) {
-        Partition part = randomPartition(g, prng);
+    for (int i = 0; i < LOCAL_SEARCH_RESTARTS; i++) {
+        Partition part = semiGreedyConstruct(g, ALPHA, prng);
         auto pr = localSearch(g, part);
         sumLocal += cutWeight(g, pr.first);
         itCounts += pr.second;
     }
-    r.localIters = itCounts / LOCAL_ITERS;
-    r.localAvg = sumLocal / LOCAL_ITERS;
+    r.localIters = itCounts / LOCAL_SEARCH_RESTARTS;
+    r.localAvg = sumLocal / LOCAL_SEARCH_RESTARTS;
 
-    auto pr = grasp(g, GRASP_ITERS, SEMI_ALPHA, prng);
+    auto pr = grasp(g, GRASP_ITERATIONS, ALPHA, prng);
     r.graspIters = pr.second;
     r.graspBest = pr.first;
 
@@ -78,7 +79,7 @@ RowResult runAll(const string &path, const string &name, mt19937 &prng) {
 
 void printCsvHeader(ostream &os) {
     os << "Name,|V| or n,|E| or m,"
-       << "Randomized-1 (avg),Greedy-1,Semi-greedy-1 (alpha=" << SEMI_ALPHA << "),"
+       << "Randomized-1 (avg),Greedy-1,Semi-greedy-1 (alpha=" << ALPHA << "),"
        << "Local-1 iterations,Local-1 average value,"
        << "GRASP-1 iterations,GRASP-1 best value,"
        << "Known best solution or upper bound\n";
@@ -135,22 +136,21 @@ int main(int argc, char **argv) {
     } else if (mode == "single") { // <graph_file> <algorithm>
         string path = argv[2];
         string algo = argv[3];
-        unsigned seed = 42;
-        mt19937 prng(seed);
+        mt19937 prng(SEED);
 
         Graph g;
         g.load(path);
 
         if (algo == "randomized") {
-            double avg = randomizedMaxCut(g, RANDOM_RUNS, prng);
-            cout << "Randomized-1 average cut over " << RANDOM_RUNS
+            double avg = randomizedMaxCut(g, RANDOMIZED_RUNS, prng);
+            cout << "Randomized-1 average cut over " << RANDOMIZED_RUNS
                       << " runs: " << avg << "\n";
         } else if (algo == "greedy") {
             Partition p = greedyConstruct(g);
             cout << "Greedy cut value: " << cutWeight(g, p) << "\n";
         } else if (algo == "semigreedy") {
-            Partition p = semiGreedyConstruct(g, SEMI_ALPHA, prng);
-            cout << "Semi-Greedy (alpha=" << SEMI_ALPHA << ") cut value: "
+            Partition p = semiGreedyConstruct(g, ALPHA, prng);
+            cout << "Semi-Greedy (alpha=" << ALPHA << ") cut value: "
                       << cutWeight(g, p) << "\n";
         } else if (algo == "localsearch") {
             Partition p = randomPartition(g, prng);
@@ -159,8 +159,8 @@ int main(int argc, char **argv) {
             long long after = cutWeight(g, p);
             cout << "Local search: start=" << before << " -> local optimum=" << after << "\n";
         } else if (algo == "grasp") {
-            long long best = grasp(g, GRASP_ITERS, SEMI_ALPHA, prng).first;
-            cout << "GRASP (" << GRASP_ITERS << " iters) best cut value: " << best << "\n";
+            long long best = grasp(g, GRASP_ITERATIONS, ALPHA, prng).first;
+            cout << "GRASP (" << GRASP_ITERATIONS << " iters) best cut value: " << best << "\n";
         } 
     } 
 }
