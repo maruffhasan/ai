@@ -1,67 +1,120 @@
-# Mancala Adversarial Search Agent
+# Mancala Adversarial Search
 
-An implementation of an AI agent for **Mancala** using the Minimax search algorithm with Alpha-Beta pruning. This repository includes custom heuristic functions, move-ordering optimizations, and execution modes for both interactive Human vs. AI play and automated AI vs. AI performance evaluation.
+A C++ implementation of Mancala (Kalah variant) featuring a minimax AI with alpha-beta pruning. Supports both interactive human-vs-computer play and automated AI-vs-AI experiments for comparing heuristics.
 
----
+## Features
 
-## Table of Contents
-- [Game Overview](#game-overview)
-- [Features & Implementation](#features--implementation)
-- [Heuristic Functions](#heuristic-functions)
-- [Requirements & Compilation](#requirements--compilation)
-- [Usage](#usage)
-  - [1. Interactive Mode (Human vs. AI)](#1-interactive-mode-human-vs-ai)
-  - [2. Automated AI vs. AI Experiments](#2-automated-ai-vs-ai-experiments)
-- [CLI Flag Reference](#cli-flag-reference)
-- [Project Structure](#project-structure)
+- **Full Mancala rules**: sowing, extra turns on landing in your own store, and the "capture" rule (landing in an empty pit on your side captures that stone plus all stones in the opposite pit).
+- **Minimax search with alpha-beta pruning** and move ordering (moves that grant an extra turn are searched first).
+- **Four selectable heuristics** of increasing sophistication (see below).
+- **Two game modes**:
+  - Interactive play against the AI.
+  - Batch AI-vs-AI experiments to compare heuristics/depths over many games.
+- **Configurable search depth** and heuristic weights via command-line flags.
 
----
+## Board Layout
 
-## Game Overview
+```
++------------------------------------------+
+|              PLAYER 1 (AI)               |
+|    [12]  [11]  [10]  [ 9]  [ 8]  [ 7]    |
+|    ( 4)  ( 4)  ( 4)  ( 4)  ( 4)  ( 4)    |
+| ( 0)                                ( 0) |
+|    ( 4)  ( 4)  ( 4)  ( 4)  ( 4)  ( 4)    |
+|    [ 0]  [ 1]  [ 2]  [ 3]  [ 4]  [ 5]    |
+|            PLAYER 0 (HUMAN)              |
++------------------------------------------+
+```
 
-Mancala is a two-player turn-based strategy game played on a board with 12 pits (6 per player) and 2 storage bins (Mancala).
+- Pits `0–5` belong to Player 0 (Human); pit `6` is Player 0's store.
+- Pits `7–12` belong to Player 1 (AI); pit `13` is Player 1's store.
+- Each pit starts with 4 stones; stores start empty.
 
-* **Start:** Each pit starts with 4 stones, and both stores are empty.
-* **Gameplay:** Players take turns selecting a non-empty pit on their side to sow stones counter-clockwise around the board.
-* **Extra Turn:** If the last stone lands in the player's own store, the player gets an extra turn.
-* **Capture:** If the last stone lands in an empty pit on the player's side and the opponent's opposite pit contains stones, both the last stone and the opposite stones are captured into the player's store.
-* **End Game:** When one player's pits are completely empty, all remaining stones on the opponent's side are swept into their respective store. The player with the most stones in their store wins.
+## Rules Implemented
 
----
+1. **Sowing**: pick a non-empty pit on your side; one stone is dropped into each subsequent pit going counter-clockwise, skipping the opponent's store.
+2. **Extra turn**: if your last stone lands in your own store, you move again.
+3. **Capture**: if your last stone lands in an empty pit on your own side, you capture that stone plus all stones in the directly opposite pit, moving them into your store.
+4. **Game end**: when one player's side is completely empty, the other player sweeps all remaining stones on their side into their own store. Higher store total wins.
 
-## Features & Implementation
+## AI Heuristics
 
-* **Adversarial Search:** Minimax search integrated with **Alpha-Beta Pruning** for branch elimination[cite: 1].
-* **Move Ordering Optimization:** Uses `std::stable_sort` to prioritize moves that grant immediate extra turns, maximizing Alpha-Beta pruning efficiency while keeping state evaluation deterministic across equal-valued paths.
-* **4 Heuristic Functions:** Implements multi-tier strategic evaluation models ranging from basic score differences to advanced capture and turn-earning strategies[cite: 1].
-* **Zero-Allocation Board State:** Built using a stack-allocated `std::array<int, 14>` board structure to minimize memory overhead and eliminate dynamic heap allocations during deep state expansions.
-* **Flexible Execution Modes:** Features an interactive CLI for Human vs. AI play and an automated batch runner for experimental win-loss evaluations[cite: 1].
+The AI evaluates board states using one of four heuristic types (`--ai_heuristic`, `--p0`, `--p1`):
 
----
+| Type | Formula | Description |
+|------|---------|--------------|
+| 1 | `store_diff` | Difference between the player's store and the opponent's store. |
+| 2 | `w1*store_diff + w2*side_diff` | Adds the difference in total stones remaining on each side. |
+| 3 | `w1*store_diff + w2*side_diff + w3*extra_moves` | Adds the number of moves available that would grant an extra turn. |
+| 4 | `w1*store_diff + w2*side_diff + w3*extra_moves + w4*capture_value` | Adds the total stones capturable this turn across all available moves. |
 
-## Heuristic Functions
+Weights (`w1`–`w4`) default to `1.0, 2.0, 3.0, 4.0` and can be overridden via command-line flags.
 
-The AI includes 4 evaluation functions to score favorable board states[cite: 1]:
+## Building
 
-| Heuristic | Evaluation Formula | Strategic Focus |
-| :--- | :--- | :--- |
-| **Heuristic 1**[cite: 1] | $\Delta\text{Store}$ | **Store Difference:** Evaluates pure score differential between stores[cite: 1]. |
-| **Heuristic 2**[cite: 1] | $W_1 \cdot \Delta\text{Store} + W_2 \cdot \Delta\text{Side}$ | **Side Control:** Adds remaining pit stone differential to encourage board dominance[cite: 1]. |
-| **Heuristic 3**[cite: 1] | $W_1 \cdot \Delta\text{Store} + W_2 \cdot \Delta\text{Side} + W_3 \cdot \text{ExtraTurns}$ | **Turn Advantage:** Evaluates moves that grant extra turn opportunities[cite: 1]. |
-| **Heuristic 4**[cite: 1] | $W_1 \cdot \Delta\text{Store} + W_2 \cdot \Delta\text{Side} + W_3 \cdot \text{ExtraTurns} + W_4 \cdot \text{Captures}$ | **Tactical Capture:** Combines score, side control, extra turns, and capture potential[cite: 1]. |
-
-> **Note:** $W_1, W_2, W_3, W_4$ represent feature weight multipliers customizable via command-line arguments.
-
----
-
-## Requirements & Compilation
-
-### Requirements
-* C++11 compatible compiler (GCC / Clang / MSVC)
-* Standard C++ libraries (`iostream`, `vector`, `array`, `thread`, etc.)
-
-### Compilation
-Compile the program using `g++` with optimization flags enabled:
+Requires a C++17 (or later) compiler.
 
 ```bash
-g++ -O3 -std=c++11 main.cpp -o mancala_ai
+g++ -std=c++17 -O2 -o mancala mancala.cpp
+```
+
+## Usage
+
+```
+Mancala Adversarial Search - Usage:
+  --play           Play interactively vs Computer
+  --ai_heuristic H Heuristic choice for AI in play mode: 1-4 (default 4)
+  --games N        Number of games to auto-play in AI vs AI mode (default 100)
+  --p0 H           Heuristic type for player 0 in AI vs AI mode (default 4)
+  --p1 H           Heuristic type for player 1 in AI vs AI mode (default 1)
+  --depth D        Search depth limit for AI players (default 6)
+  --help           Show this message
+```
+
+Additional flags to override heuristic weights (apply to both players): `--w1`, `--w2`, `--w3`, `--w4`.
+
+### Play against the AI
+
+```bash
+./mancala --play
+```
+
+You are Player 0 (pits `0–5`) and move first. Enter a pit number `0–5` on your turn. The AI (Player 1) uses heuristic 4 by default; change it with `--ai_heuristic`:
+
+```bash
+./mancala --play --ai_heuristic 2
+```
+
+### Run AI-vs-AI experiments
+
+Compare two heuristics/configurations over many games (no interactive prompts):
+
+```bash
+./mancala --games 200 --p0 4 --p1 1 --depth 6
+```
+
+This prints progress updates and a final summary: win counts/percentages for each player, draw rate, and the average number of search nodes visited per game.
+
+### Example: custom heuristic weights
+
+```bash
+./mancala --games 100 --p0 4 --p1 4 --w1 1.0 --w2 1.5 --w3 2.0 --w4 3.0
+```
+
+## Code Structure
+
+| Component | Purpose |
+|-----------|---------|
+| `board` | Holds the 14-cell array representing pits and stores. |
+| `weights` / `ai_config` | Heuristic weights and AI search configuration (heuristic type, max depth). |
+| `apply_move`, `valid_moves`, `is_game_over`, `finalize_game` | Core game mechanics: sowing, capture, turn/end-of-game handling. |
+| `evaluate` | Scores a board state for a given player using the selected heuristic. |
+| `minimax` | Alpha-beta pruned minimax search over future game states. |
+| `choose_move` | Top-level move selection: runs minimax for each candidate move and picks the best. |
+| `play_human_vs_computer` | Interactive game loop with console I/O and display. |
+| `play_game` / `run_experiment` | Automated AI-vs-AI game loop and batch experiment runner with statistics. |
+
+## Notes
+
+- The `game_delay_ms` global (default `800`) adds artificial pauses during interactive play for readability; it has no effect on AI-vs-AI experiments' timing logic.
+- Search node counts are tracked and reported to give a rough sense of search cost across heuristics/depths.
