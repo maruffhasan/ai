@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mancala</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--
+  ============================================================================
+  SETUP REQUIRED FOR ONLINE PLAY (5 minutes, free)
+  ============================================================================
+  1. Go to https://console.firebase.google.com and create a free project.
+  2. In the project, open "Build > Realtime Database" and click "Create Database".
+     Choose "Start in test mode" (fine for a casual game between friends).
+  3. Click the gear icon > Project settings > scroll to "Your apps" > click the
+     "</>" (web) icon to register a web app. Copy the firebaseConfig object.
+  4. Paste your config into the FIREBASE_CONFIG object below, replacing the
+     placeholder values.
+  5. Save this file and host it (see hosting instructions Claude gave you).
+  ============================================================================
+-->
+<style>
+  :root{
+    --wood-dark: #3b2417;
+    --wood-mid: #5c3a24;
+    --wood-light: #7a4f30;
+    --pit-shadow: #241206;
+    --p1-color: #d98c3f;
+    --p1-glow: #f2b264;
+    --p2-color: #3f8ea1;
+    --p2-glow: #6fc4da;
+    --seed-cream: #f2e2b6;
+    --seed-shadow: #a8895a;
+    --paper: #f4ecda;
+    --ink: #2a1a10;
+    --ink-soft: #6b5540;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; min-height:100vh;
+    background:
+      radial-gradient(ellipse at 20% -10%, #4a2f1c 0%, transparent 55%),
+      radial-gradient(ellipse at 90% 110%, #3a2415 0%, transparent 55%),
+      var(--wood-dark);
+    font-family:'Inter', sans-serif;
+    color: var(--paper);
+    display:flex; flex-direction:column; align-items:center;
+    padding: 28px 14px 60px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size: clamp(2rem, 5vw, 3.1rem);
+    letter-spacing: -0.01em;
+    margin: 6px 0 2px;
+    color: var(--seed-cream);
+    text-shadow: 0 2px 0 rgba(0,0,0,0.35);
+  }
+  .subtitle{
+    font-size: 0.85rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c9ac86;
+    margin-bottom: 22px;
+    text-align:center;
+  }
+
+  /* ---------- lobby ---------- */
+  .lobby-card{
+    background: linear-gradient(160deg, var(--wood-light), var(--wood-mid) 55%, var(--wood-dark));
+    border-radius: 24px;
+    padding: 34px 32px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 45px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.08);
+    text-align:center;
+  }
+  .lobby-card h2{
+    font-family:'Fraunces', serif;
+    font-size: 1.4rem;
+    margin: 0 0 6px;
+    color: var(--seed-cream);
+  }
+  .lobby-card p.lobby-sub{
+    font-size: 0.85rem;
+    color: #c9ac86;
+    margin: 0 0 22px;
+    line-height:1.5;
+  }
+  .lobby-btn{
+    display:block; width:100%;
+    font-family:'Inter', sans-serif; font-weight:600; font-size:0.95rem;
+    padding: 13px 18px;
+    border-radius: 14px;
+    border: none;
+    cursor:pointer;
+    margin-bottom: 12px;
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .lobby-btn:hover{ transform: translateY(-1px); filter: brightness(1.08); }
+  .lobby-btn.primary{ background: linear-gradient(135deg, var(--p1-color), #b56a20); color:#2a1706; }
+  .lobby-btn.secondary{ background: rgba(0,0,0,0.28); color: var(--paper); border: 1px solid rgba(255,255,255,0.15); }
+  .lobby-divider{ display:flex; align-items:center; gap:10px; margin: 18px 0; color:#a3896a; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.1em; }
+  .lobby-divider::before, .lobby-divider::after{ content:""; flex:1; height:1px; background: rgba(255,255,255,0.15); }
+  .join-row{ display:flex; gap:8px; margin-bottom: 6px; }
+  .join-row input{
+    flex:1; min-width:0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.3);
+    color: var(--paper);
+    font-family:'Inter', sans-serif; font-size:0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .join-row input::placeholder{ color:#8a7359; text-transform:none; letter-spacing:normal; }
+  .join-row button{
+    padding: 12px 18px;
+    border-radius: 12px;
+    border:none;
+    background: linear-gradient(135deg, var(--p2-color), #235c6b);
+    color:#eaf7fa;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .setup-warning{
+    margin-top: 18px;
+    background: rgba(217, 74, 74, 0.15);
+    border: 1px solid rgba(217, 74, 74, 0.4);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 0.78rem;
+    line-height:1.5;
+    color: #f3c6c6;
+    text-align:left;
+    display:none;
+  }
+  .lobby-error{
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: #f3c6c6;
+    display:none;
+  }
+
+  /* ---------- room bar ---------- */
+  .room-bar{
+    display:none;
+    align-items:center; gap:10px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
+    padding: 8px 10px 8px 18px;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+    justify-content:center;
+  }
+  .room-bar .room-code{ font-weight:700; letter-spacing:0.1em; color: var(--seed-cream); font-family:'Fraunces', serif; }
+  .room-bar button{
+    padding: 7px 14px;
+    border-radius: 999px;
+    border:none;
+    background: rgba(255,255,255,0.12);
+    color: var(--paper);
+    font-size:0.78rem;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .room-bar button:hover{ background: rgba(255,255,255,0.2); }
+  .waiting-note{ color:#e2c9a0; font-size:0.8rem; }
+
+  /* ---------- status bar ---------- */
+  .status-wrap{
+    display:none;
+    align-items: center; gap:14px;
+    margin-bottom: 20px;
+    font-family:'Fraunces', serif;
+  }
+  .status-pill{
+    padding: 9px 20px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 1.05rem;
+    font-weight:600;
+    transition: all .25s ease;
+  }
+  .status-pill.active-1{ background: linear-gradient(135deg, var(--p1-color), #b56a20); color:#2a1706; box-shadow: 0 0 0 2px rgba(242,178,100,0.5), 0 4px 14px rgba(217,140,63,0.4); }
+  .status-pill.active-2{ background: linear-gradient(135deg, var(--p2-color), #235c6b); color:#eaf7fa; box-shadow: 0 0 0 2px rgba(111,196,218,0.5), 0 4px 14px rgba(63,142,161,0.4); }
+  .you-tag{
+    font-size: 0.72rem;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    color: #e2c9a0;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ---------- board ---------- */
+  .board-outer{
+    display:none;
+    background: linear-gradient(160deg, var(--wood-light), var(--wood-mid) 55%, var(--wood-dark));
+    border-radius: 28px;
+    padding: 26px 26px;
+    box-shadow:
+      0 20px 45px rgba(0,0,0,0.5),
+      inset 0 2px 0 rgba(255,255,255,0.08),
+      inset 0 -6px 18px rgba(0,0,0,0.45);
+    position: relative;
+    max-width: 980px;
+    width: 100%;
+  }
+  .board-outer::before{
+    content:"";
+    position:absolute; inset: 8px;
+    border-radius: 20px;
+    border: 1px solid rgba(0,0,0,0.25);
+    pointer-events:none;
+    background-image: repeating-linear-gradient(100deg, rgba(0,0,0,0.035) 0px, rgba(0,0,0,0.035) 2px, transparent 2px, transparent 7px);
+  }
+  .board{
+    display:grid;
+    grid-template-columns: 100px repeat(6, 1fr) 100px;
+    column-gap: 12px;
+    row-gap: 34px;
+    position: relative;
+    transition: transform 0.6s cubic-bezier(.4,0,.2,1);
+  }
+  .board.flipped{ transform: rotate(180deg); }
+  .board.flipped .store-label{ transform: translateX(-50%) rotate(180deg); }
+  .board.flipped .store .count-label{ transform: translateX(-50%) rotate(180deg); }
+
+  .store{
+    border-radius: 26px;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    min-height: 220px;
+    background: radial-gradient(ellipse at 50% 45%, #1c0f07 0%, var(--pit-shadow) 60%, #150b04 100%);
+    box-shadow: inset 0 10px 24px rgba(0,0,0,0.65), inset 0 -3px 6px rgba(255,255,255,0.05);
+    padding: 14px 8px;
+  }
+  .store .seed-cluster{
+    width:100%; height:100%;
+    display:flex; flex-wrap:wrap; align-content:center; justify-content:center;
+    gap: 4px;
+  }
+  .store .count-label{
+    position:absolute; bottom: 10px; left:50%; transform:translateX(-50%);
+    font-family:'Fraunces', serif; font-weight:700; font-size: 1.6rem;
+    color: var(--seed-cream);
+    text-shadow: 0 2px 3px rgba(0,0,0,0.6);
+  }
+  .store-label{
+    position:absolute; top: -22px; left:50%; transform:translateX(-50%);
+    font-size: 0.68rem; letter-spacing:0.12em; text-transform:uppercase; color:#c9ac86;
+    white-space:nowrap;
+  }
+
+  .pit{
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 40%, #211208 0%, var(--pit-shadow) 65%, #170c04 100%);
+    box-shadow: inset 0 8px 18px rgba(0,0,0,0.65), inset 0 -2px 4px rgba(255,255,255,0.06);
+    position:relative;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .pit-inner{
+    width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+  }
+  .pit .seed-cluster{
+    width: 82%; height:82%;
+    display:flex; flex-wrap:wrap; align-content:center; justify-content:center;
+    gap: 3px;
+  }
+  .pit.clickable:hover{
+    transform: translateY(-3px);
+    box-shadow: inset 0 8px 18px rgba(0,0,0,0.65), 0 0 0 3px var(--glow-color, rgba(255,255,255,0.2));
+  }
+  .pit.p1-pit{ --glow-color: rgba(242,178,100,0.55); }
+  .pit.p2-pit{ --glow-color: rgba(111,196,218,0.55); }
+  .pit.disabled{ cursor:not-allowed; opacity:0.92; }
+  .pit .count-label{
+    position:absolute; bottom: -20px; left:50%; transform:translateX(-50%);
+    font-size: 0.78rem; color:#c9ac86; font-weight:600;
+  }
+  .board.flipped .pit-inner{ transform: rotate(180deg); }
+  .pit.last-sown{ animation: pulse-pit 0.5s ease; }
+  @keyframes pulse-pit{
+    0%{ box-shadow: inset 0 8px 18px rgba(0,0,0,0.65), 0 0 0 6px rgba(255,255,255,0.35); }
+    100%{ box-shadow: inset 0 8px 18px rgba(0,0,0,0.65), 0 0 0 0px rgba(255,255,255,0); }
+  }
+  .pit.move-picked{
+    animation: move-pick-pulse 0.6s ease-in-out infinite;
+    transform: translateY(-4px);
+    z-index: 2;
+  }
+  @keyframes move-pick-pulse{
+    0%, 100%{ box-shadow: inset 0 8px 18px rgba(0,0,0,0.65), 0 0 0 5px rgba(255,255,255,0.9); }
+    50%{ box-shadow: inset 0 8px 18px rgba(0,0,0,0.65), 0 0 0 9px rgba(255,255,255,0.35); }
+  }
+
+  .seed{
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    box-shadow: inset -2px -2px 3px rgba(0,0,0,0.35), inset 1px 1px 2px rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .seed.p1{ background: radial-gradient(circle at 35% 30%, var(--p1-glow), var(--p1-color) 65%, #a3610f); }
+  .seed.p2{ background: radial-gradient(circle at 35% 30%, var(--p2-glow), var(--p2-color) 65%, #1f5967); }
+
+  .fly-seed{
+    position: fixed;
+    width: 15px; height:15px; border-radius:50%;
+    pointer-events:none; z-index: 999;
+    box-shadow: inset -2px -2px 3px rgba(0,0,0,0.35), inset 1px 1px 2px rgba(255,255,255,0.6), 0 2px 5px rgba(0,0,0,0.45);
+  }
+
+  .controls{
+    display:none;
+    margin-top: 26px;
+    gap: 14px; align-items:center;
+  }
+  button.reset-btn{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:0.9rem;
+    padding: 10px 22px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.28);
+    color: var(--paper);
+    cursor:pointer;
+    transition: background .2s ease, transform .15s ease;
+  }
+  button.reset-btn:hover{ background: rgba(0,0,0,0.42); transform: translateY(-1px); }
+
+  .message-banner{
+    display:none;
+    margin-top: 16px;
+    min-height: 24px;
+    font-size: 0.92rem;
+    color: #e2c9a0;
+    text-align:center;
+    max-width: 560px;
+  }
+
+  .rules-note{
+    display:none;
+    margin-top: 30px;
+    max-width: 640px;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: #b19b7d;
+    text-align:center;
+    padding: 0 10px;
+  }
+
+  .overlay{
+    position: fixed; inset:0;
+    background: rgba(15,8,4,0.78);
+    display:flex; align-items:center; justify-content:center;
+    z-index: 1000;
+    opacity:0; pointer-events:none;
+    transition: opacity .35s ease;
+  }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+  .overlay-card{
+    background: linear-gradient(160deg, var(--wood-light), var(--wood-mid));
+    border-radius: 22px;
+    padding: 40px 46px;
+    text-align:center;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.08);
+    transform: scale(0.92);
+    transition: transform .35s ease;
+    max-width: 90vw;
+  }
+  .overlay.show .overlay-card{ transform: scale(1); }
+  .overlay-card h2{
+    font-family:'Fraunces', serif; font-size: 2.1rem; margin: 0 0 8px;
+    color: var(--seed-cream);
+  }
+  .overlay-card p{ color:#e2c9a0; margin: 4px 0 22px; font-size:0.95rem; }
+
+  @media (max-width: 720px){
+    .board{ grid-template-columns: 56px repeat(6, 1fr) 56px; column-gap:8px; row-gap:26px; }
+    .store{ min-height: 150px; border-radius:18px; }
+    .seed{ width:11px; height:11px; }
+    h1{ font-size: 1.7rem; }
+    .board-outer{ padding: 16px; border-radius:20px; }
+  }
+</style>
+</head>
+<body>
+
+  <h1>Mancala</h1>
+  <div class="subtitle" id="subtitle">Play locally or online with a friend</div>
+
+  <!-- ===================== LOBBY ===================== -->
+  <div class="lobby-card" id="lobby">
+    <h2>Start a game</h2>
+    <p class="lobby-sub">Create an online room and send the link to a friend, play together on this device, or challenge the computer.</p>
+
+    <button class="lobby-btn primary" id="createBtn">Create Online Game</button>
+
+    <div class="join-row">
+      <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="5">
+      <button id="joinBtn">Join</button>
+    </div>
+    <div class="lobby-error" id="lobbyError"></div>
+
+    <div class="lobby-divider">or</div>
+    <button class="lobby-btn secondary" id="localBtn">Play Together on This Device</button>
+
+    <div class="lobby-divider">or</div>
+    <button class="lobby-btn secondary" id="aiBtn">Play with AI</button>
+
+    <div class="setup-warning" id="setupWarning">
+      ⚠️ Online play needs a free Firebase config pasted into this file first.
+      Open the HTML file, find <code>FIREBASE_CONFIG</code> near the top of the script, and
+      replace the placeholder values with your own project's config (see the setup
+      instructions in a comment near the top of the file). Local pass-and-play still works
+      without this.
+    </div>
+  </div>
+
+  <!-- ===================== ROOM BAR ===================== -->
+  <div class="room-bar" id="roomBar">
+    <span>Room <span class="room-code" id="roomCodeLabel">—</span></span>
+    <button id="copyLinkBtn">Copy Invite Link</button>
+    <span class="waiting-note" id="waitingNote"></span>
+  </div>
+
+  <div class="status-wrap" id="statusWrap">
+    <div class="status-pill" id="statusPill">Player 1's Turn</div>
+    <div class="you-tag" id="youTag" style="display:none;"></div>
+  </div>
+
+  <div class="board-outer" id="boardOuter">
+    <div class="board" id="board">
+      <div class="store" id="store2" style="grid-column:1; grid-row:1 / 3;">
+        <div class="store-label">Player 2 Store</div>
+        <div class="seed-cluster" id="cluster13"></div>
+        <div class="count-label" id="count13">0</div>
+      </div>
+
+      <div class="pit p2-pit" data-idx="12" style="grid-column:2; grid-row:1;"><div class="pit-inner"><div class="seed-cluster" id="cluster12"></div><div class="count-label" id="count12">4</div></div></div>
+      <div class="pit p2-pit" data-idx="11" style="grid-column:3; grid-row:1;"><div class="pit-inner"><div class="seed-cluster" id="cluster11"></div><div class="count-label" id="count11">4</div></div></div>
+      <div class="pit p2-pit" data-idx="10" style="grid-column:4; grid-row:1;"><div class="pit-inner"><div class="seed-cluster" id="cluster10"></div><div class="count-label" id="count10">4</div></div></div>
+      <div class="pit p2-pit" data-idx="9" style="grid-column:5; grid-row:1;"><div class="pit-inner"><div class="seed-cluster" id="cluster9"></div><div class="count-label" id="count9">4</div></div></div>
+      <div class="pit p2-pit" data-idx="8" style="grid-column:6; grid-row:1;"><div class="pit-inner"><div class="seed-cluster" id="cluster8"></div><div class="count-label" id="count8">4</div></div></div>
+      <div class="pit p2-pit" data-idx="7" style="grid-column:7; grid-row:1;"><div class="pit-inner"><div class="seed-cluster" id="cluster7"></div><div class="count-label" id="count7">4</div></div></div>
+
+      <div class="store" id="store1" style="grid-column:8; grid-row:1 / 3;">
+        <div class="store-label">Player 1 Store</div>
+        <div class="seed-cluster" id="cluster6"></div>
+        <div class="count-label" id="count6">0</div>
+      </div>
+
+      <div class="pit p1-pit" data-idx="0" style="grid-column:2; grid-row:2;"><div class="pit-inner"><div class="seed-cluster" id="cluster0"></div><div class="count-label" id="count0">4</div></div></div>
+      <div class="pit p1-pit" data-idx="1" style="grid-column:3; grid-row:2;"><div class="pit-inner"><div class="seed-cluster" id="cluster1"></div><div class="count-label" id="count1">4</div></div></div>
+      <div class="pit p1-pit" data-idx="2" style="grid-column:4; grid-row:2;"><div class="pit-inner"><div class="seed-cluster" id="cluster2"></div><div class="count-label" id="count2">4</div></div></div>
+      <div class="pit p1-pit" data-idx="3" style="grid-column:5; grid-row:2;"><div class="pit-inner"><div class="seed-cluster" id="cluster3"></div><div class="count-label" id="count3">4</div></div></div>
+      <div class="pit p1-pit" data-idx="4" style="grid-column:6; grid-row:2;"><div class="pit-inner"><div class="seed-cluster" id="cluster4"></div><div class="count-label" id="count4">4</div></div></div>
+      <div class="pit p1-pit" data-idx="5" style="grid-column:7; grid-row:2;"><div class="pit-inner"><div class="seed-cluster" id="cluster5"></div><div class="count-label" id="count5">4</div></div></div>
+    </div>
+  </div>
+
+  <div class="message-banner" id="message"></div>
+
+  <div class="controls" id="controls">
+    <button class="reset-btn" id="resetBtn">New Game</button>
+    <button class="reset-btn" id="leaveBtn">Leave Room</button>
+  </div>
+
+  <div class="rules-note" id="rulesNote">
+    Sow counterclockwise, one seed per pit, skipping your opponent's store. Land your last seed in your own empty pit
+    to capture it plus everything opposite. Land in your own store for another turn. Game ends when one side is empty &mdash;
+    remaining seeds go to their owner.
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="overlay-card">
+      <h2 id="overlayTitle">Player 1 Wins!</h2>
+      <p id="overlaySub">18 &ndash; 14</p>
+      <button class="reset-btn" id="overlayResetBtn">Play Again</button>
+    </div>
+  </div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+
+<script>
+(function(){
+  // =========================================================================
+  // PASTE YOUR FIREBASE CONFIG HERE (see setup instructions in the HTML comment
+  // near the top of this file). Local pass-and-play works without this.
+  // =========================================================================
+  const FIREBASE_CONFIG = {
+   apiKey: "AIzaSyBHmb3m36tzsfvRhXkfnrVCpaN3idaBR7A",
+
+    authDomain: "play-mancala.firebaseapp.com",
+    
+    databaseURL: "https://play-mancala-default-rtdb.firebaseio.com/",
+
+    projectId: "play-mancala",
+
+    storageBucket: "play-mancala.firebasestorage.app",
+
+    messagingSenderId: "763361092285",
+
+    appId: "1:763361092285:web:401d6599b19f94045f8dd4",
+
+    measurementId: "G-Q2PP26CTDQ"
+
+  };
+  const FIREBASE_READY = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+
+  let db = null;
+  if(FIREBASE_READY){
+    try{
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.database();
+    }catch(e){ console.error("Firebase init failed", e); }
+  }
+
+  const P1_PITS = [0,1,2,3,4,5];
+  const P1_STORE = 6;
+  const P2_PITS = [7,8,9,10,11,12];
+  const P2_STORE = 13;
+
+  let board = [];
+  let currentPlayer = 1;
+  let gameOver = false;
+  let animating = false;
+
+  let mode = null; // 'local' | 'online' | 'ai'
+  let myRole = 1;  // 1, 2, or 'spectator' (online only)
+  let roomId = null;
+  let roomRef = null;
+  let lastSeenMoveId = -1;
+  let myClientToken = null;
+
+  const el = id => document.getElementById(id);
+
+  const lobby = el('lobby');
+  const roomBar = el('roomBar');
+  const statusWrap = el('statusWrap');
+  const boardOuter = el('boardOuter');
+  const controls = el('controls');
+  const messageEl = el('message');
+  const rulesNote = el('rulesNote');
+  const statusPill = el('statusPill');
+  const youTag = el('youTag');
+  const overlay = el('overlay');
+  const setupWarning = el('setupWarning');
+  const lobbyError = el('lobbyError');
+
+  function getClientToken(){
+    let t = localStorage.getItem('mancala_client_token');
+    if(!t){
+      t = 'c-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('mancala_client_token', t);
+    }
+    return t;
+  }
+  myClientToken = getClientToken();
+
+  function freshBoard(){
+    return [4,4,4,4,4,4,0, 4,4,4,4,4,4,0];
+  }
+
+  // =========================================================================
+  // AI ENGINE — ported from mancala.cpp (minimax + alpha-beta, heuristic 4).
+  // Board indices match the C++ exactly: 0-5 = Player 1 pits, 6 = Player 1
+  // store, 7-12 = Player 2 pits, 13 = Player 2 store. The AI always plays
+  // Player 2, using the same rules as offline/online sowing.
+  // =========================================================================
+  const AI_INF = 1e9;
+  const AI_CONFIG = { heuristicType: 4, weights: { w1: 1, w2: 2, w3: 3, w4: 4 }, maxDepth: 6 };
+
+  function aiOpponent(p){ return p === 1 ? 2 : 1; }
+  function aiStoreIdx(p){ return p === 1 ? 6 : 13; }
+  function aiOppStoreIdx(p){ return p === 1 ? 13 : 6; }
+  function aiIsOwnPit(idx, p){ return p === 1 ? (idx >= 0 && idx <= 5) : (idx >= 7 && idx <= 12); }
+  function aiOppositePit(idx){ return 12 - idx; }
+  function aiPitStart(p){ return p === 1 ? 0 : 7; }
+  function aiPitEnd(p){ return p === 1 ? 5 : 12; }
+
+  function aiValidMoves(arr, p){
+    const moves = [];
+    for(let i = aiPitStart(p); i <= aiPitEnd(p); i++) if(arr[i] > 0) moves.push(i);
+    return moves;
+  }
+  function aiSideEmpty(arr, p){
+    for(let i = aiPitStart(p); i <= aiPitEnd(p); i++) if(arr[i] > 0) return false;
+    return true;
+  }
+  function aiIsGameOver(arr){ return aiSideEmpty(arr, 1) || aiSideEmpty(arr, 2); }
+  function aiFinalize(arr){
+    let s1 = 0, s2 = 0;
+    for(let i = 0; i <= 5; i++){ s1 += arr[i]; arr[i] = 0; }
+    for(let i = 7; i <= 12; i++){ s2 += arr[i]; arr[i] = 0; }
+    arr[6] += s1; arr[13] += s2;
+  }
+  // Mutates arr in place; returns { extraTurn, captured }.
+  function aiApplyMove(arr, p, from){
+    let stones = arr[from];
+    arr[from] = 0;
+    let idx = from;
+    const oppStore = aiOppStoreIdx(p);
+    while(stones > 0){
+      idx = (idx + 1) % 14;
+      if(idx === oppStore) continue;
+      arr[idx]++;
+      stones--;
+    }
+    let captured = 0;
+    if(aiIsOwnPit(idx, p) && arr[idx] === 1){
+      const opp = aiOppositePit(idx);
+      if(arr[opp] > 0){
+        captured = arr[idx] + arr[opp];
+        arr[aiStoreIdx(p)] += captured;
+        arr[idx] = 0; arr[opp] = 0;
+      }
+    }
+    if(aiIsGameOver(arr)) aiFinalize(arr);
+    return { extraTurn: idx === aiStoreIdx(p), captured };
+  }
+  function aiSideSum(arr, p){
+    let s = 0;
+    for(let i = aiPitStart(p); i <= aiPitEnd(p); i++) s += arr[i];
+    return s;
+  }
+  function aiLandsInOwnStore(arr, p, from){
+    let stones = arr[from];
+    if(stones === 0) return false;
+    let idx = from;
+    const oppStore = aiOppStoreIdx(p);
+    while(stones > 0){
+      idx = (idx + 1) % 14;
+      if(idx === oppStore) continue;
+      stones--;
+    }
+    return idx === aiStoreIdx(p);
+  }
+  function aiExtraMoveOpportunities(arr, p){
+    let count = 0;
+    for(let i = aiPitStart(p); i <= aiPitEnd(p); i++){
+      if(arr[i] > 0 && aiLandsInOwnStore(arr, p, i)) count++;
+    }
+    return count;
+  }
+  function aiCaptureOpportunityValue(arr, p){
+    let best = 0;
+    for(let i = aiPitStart(p); i <= aiPitEnd(p); i++){
+      if(arr[i] === 0) continue;
+      const copy = arr.slice();
+      const { captured } = aiApplyMove(copy, p, i);
+      best += captured;
+    }
+    return best;
+  }
+  function aiEvaluate(arr, player, heuristicType, w){
+    const opp = aiOpponent(player);
+    const storeDiff = arr[aiStoreIdx(player)] - arr[aiStoreIdx(opp)];
+    if(heuristicType === 1) return storeDiff;
+    const sideDiff = aiSideSum(arr, player) - aiSideSum(arr, opp);
+    if(heuristicType === 2) return w.w1 * storeDiff + w.w2 * sideDiff;
+    const extraMove = aiExtraMoveOpportunities(arr, player);
+    if(heuristicType === 3) return w.w1 * storeDiff + w.w2 * sideDiff + w.w3 * extraMove;
+    const stonesCaptured = aiCaptureOpportunityValue(arr, player);
+    return w.w1 * storeDiff + w.w2 * sideDiff + w.w3 * extraMove + w.w4 * stonesCaptured;
+  }
+  function aiOrderMoves(arr, player, moves){
+    return moves.slice().sort((a, b)=>{
+      const la = aiLandsInOwnStore(arr, player, a);
+      const lb = aiLandsInOwnStore(arr, player, b);
+      return (lb ? 1 : 0) - (la ? 1 : 0);
+    });
+  }
+  function aiMinimax(arr, currentPlayer, aiPlayer, depth, alpha, beta, cfg){
+    if(depth === 0 || aiIsGameOver(arr)){
+      return aiEvaluate(arr, aiPlayer, cfg.heuristicType, cfg.weights);
+    }
+    const moves = aiValidMoves(arr, currentPlayer);
+    if(moves.length === 0){
+      return aiEvaluate(arr, aiPlayer, cfg.heuristicType, cfg.weights);
+    }
+    const maximizing = currentPlayer === aiPlayer;
+    const ordered = aiOrderMoves(arr, currentPlayer, moves);
+    if(maximizing){
+      let best = -AI_INF;
+      for(const m of ordered){
+        const next = arr.slice();
+        const { extraTurn } = aiApplyMove(next, currentPlayer, m);
+        const nextPlayer = extraTurn ? currentPlayer : aiOpponent(currentPlayer);
+        const val = aiMinimax(next, nextPlayer, aiPlayer, depth - 1, alpha, beta, cfg);
+        best = Math.max(best, val);
+        alpha = Math.max(alpha, best);
+        if(beta <= alpha) break;
+      }
+      return best;
+    } else {
+      let best = AI_INF;
+      for(const m of ordered){
+        const next = arr.slice();
+        const { extraTurn } = aiApplyMove(next, currentPlayer, m);
+        const nextPlayer = extraTurn ? currentPlayer : aiOpponent(currentPlayer);
+        const val = aiMinimax(next, nextPlayer, aiPlayer, depth - 1, alpha, beta, cfg);
+        best = Math.min(best, val);
+        beta = Math.min(beta, best);
+        if(beta <= alpha) break;
+      }
+      return best;
+    }
+  }
+  function aiChooseMove(arr, player, cfg){
+    const moves = aiValidMoves(arr, player);
+    if(moves.length === 0) return -1;
+    if(moves.length === 1) return moves[0];
+    let alpha = -AI_INF, beta = AI_INF, best = -AI_INF, bestMove = moves[0];
+    const ordered = aiOrderMoves(arr, player, moves);
+    for(const m of ordered){
+      const next = arr.slice();
+      const { extraTurn } = aiApplyMove(next, player, m);
+      const nextPlayer = extraTurn ? player : aiOpponent(player);
+      const val = aiMinimax(next, nextPlayer, player, cfg.maxDepth - 1, alpha, beta, cfg);
+      if(val > best){ best = val; bestMove = m; }
+      alpha = Math.max(alpha, best);
+    }
+    return bestMove;
+  }
+
+  function showPlayArea(show){
+    roomBar.style.display = show && mode==='online' ? 'flex' : 'none';
+    statusWrap.style.display = show ? 'flex' : 'none';
+    boardOuter.style.display = show ? 'block' : 'none';
+    controls.style.display = show ? 'flex' : 'none';
+    messageEl.style.display = show ? 'block' : 'none';
+    rulesNote.style.display = show ? 'block' : 'none';
+    lobby.style.display = show ? 'none' : 'block';
+  }
+
+  function opponentStoreOf(player){ return player === 1 ? P2_STORE : P1_STORE; }
+  function ownStoreOf(player){ return player === 1 ? P1_STORE : P2_STORE; }
+  function ownPitsOf(player){ return player === 1 ? P1_PITS : P2_PITS; }
+  function isOwnPit(player, idx){ return ownPitsOf(player).includes(idx); }
+  function oppositeIdx(idx){ return 12 - idx; }
+
+  function render(){
+    for(let i=0;i<14;i++){
+      const countEl = el('count'+i);
+      const clusterEl = el('cluster'+i);
+      if(!countEl) continue;
+      countEl.textContent = board[i];
+      clusterEl.innerHTML = '';
+      const owner = (P1_PITS.includes(i) || i===P1_STORE) ? 'p1' : 'p2';
+      const maxSeedsShown = Math.min(board[i], 24);
+      for(let s=0;s<maxSeedsShown;s++){
+        const seedEl = document.createElement('div');
+        seedEl.className = 'seed ' + owner;
+        clusterEl.appendChild(seedEl);
+      }
+    }
+    document.querySelectorAll('.pit').forEach(pitEl=>{
+      const idx = parseInt(pitEl.dataset.idx);
+      const canAct = mode==='local' ? true : (myRole === currentPlayer);
+      const clickable = !gameOver && !animating && canAct && isOwnPit(currentPlayer, idx) && board[idx] > 0;
+      pitEl.classList.toggle('clickable', clickable);
+      pitEl.classList.toggle('disabled', !clickable);
+    });
+  }
+
+  function applyBoardOrientation(){
+    const shouldFlip = (mode === 'online' && myRole === 2);
+    el('board').classList.toggle('flipped', shouldFlip);
+  }
+
+  function updateStatus(){
+    statusPill.textContent = (mode==='ai' && currentPlayer===2) ? "AI's Turn" : "Player " + currentPlayer + "'s Turn";
+    statusPill.classList.toggle('active-1', currentPlayer===1);
+    statusPill.classList.toggle('active-2', currentPlayer===2);
+    if(mode==='online' && myRole!=='spectator'){
+      youTag.style.display = 'inline-block';
+      youTag.textContent = 'You are Player ' + myRole;
+    } else if(mode==='online'){
+      youTag.style.display = 'inline-block';
+      youTag.textContent = 'Spectating';
+    } else if(mode==='ai'){
+      youTag.style.display = 'inline-block';
+      youTag.textContent = currentPlayer===1 ? 'You are Player 1' : 'AI is thinking…';
+    } else {
+      youTag.style.display = 'none';
+    }
+  }
+
+  function getPitCenter(idx){
+    let target;
+    if(idx===P1_STORE) target = el('store1');
+    else if(idx===P2_STORE) target = el('store2');
+    else target = document.querySelector('.pit[data-idx="'+idx+'"]');
+    const r = target.getBoundingClientRect();
+    return { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+
+  function flySeed(fromIdx, toIdx, colorClass){
+    return new Promise(resolve=>{
+      const start = getPitCenter(fromIdx);
+      const end = getPitCenter(toIdx);
+      const seed = document.createElement('div');
+      seed.className = 'fly-seed seed ' + colorClass;
+      seed.style.left = (start.x - 7.5) + 'px';
+      seed.style.top = (start.y - 7.5) + 'px';
+      seed.style.transition = 'left .28s cubic-bezier(.34,1.4,.64,1), top .28s cubic-bezier(.34,1.4,.64,1)';
+      document.body.appendChild(seed);
+      setTimeout(()=>{
+        seed.style.left = (end.x - 7.5) + 'px';
+        seed.style.top = (end.y - 7.5) + 'px';
+      }, 20);
+      setTimeout(()=>{ seed.remove(); resolve(); }, 320);
+    });
+  }
+
+  function highlightPit(idx){
+    let elt;
+    if(idx===P1_STORE) elt = el('store1');
+    else if(idx===P2_STORE) elt = el('store2');
+    else elt = document.querySelector('.pit[data-idx="'+idx+'"]');
+    elt.classList.remove('last-sown');
+    void elt.offsetWidth;
+    elt.classList.add('last-sown');
+  }
+
+  // Core sow routine. broadcast=true means WE initiated this move (push to Firebase after).
+  // broadcast=false means we're replaying a move that already happened remotely.
+  async function sow(startIdx, broadcast){
+    animating = true;
+    render();
+    const player = currentPlayer;
+    const colorClass = player === 1 ? 'p1' : 'p2';
+    const skipStore = opponentStoreOf(player);
+
+    let seeds = board[startIdx];
+    board[startIdx] = 0;
+    render();
+    let idx = startIdx;
+    let lastIdx = startIdx;
+
+    while(seeds > 0){
+      idx = (idx + 1) % 14;
+      if(idx === skipStore) continue;
+      await flySeed(lastIdx===idx ? startIdx : lastIdx, idx, colorClass);
+      board[idx]++;
+      render();
+      highlightPit(idx);
+      lastIdx = idx;
+      seeds--;
+    }
+
+    let captureMsg = "";
+    if(isOwnPit(player, lastIdx) && board[lastIdx] === 1){
+      const oppIdx = oppositeIdx(lastIdx);
+      if(board[oppIdx] > 0){
+        const captured = board[oppIdx] + board[lastIdx];
+        board[oppIdx] = 0;
+        board[lastIdx] = 0;
+        board[ownStoreOf(player)] += captured;
+        render();
+        captureMsg = " Captured " + captured + " seed" + (captured===1?"":"s") + "!";
+      }
+    }
+
+    const p1Empty = P1_PITS.every(i=>board[i]===0);
+    const p2Empty = P2_PITS.every(i=>board[i]===0);
+    if(p1Empty || p2Empty){
+      const remainingToP1 = P1_PITS.reduce((a,i)=>a+board[i],0);
+      const remainingToP2 = P2_PITS.reduce((a,i)=>a+board[i],0);
+      P1_PITS.forEach(i=>board[i]=0);
+      P2_PITS.forEach(i=>board[i]=0);
+      board[P1_STORE] += remainingToP1;
+      board[P2_STORE] += remainingToP2;
+      render();
+      animating = false;
+      gameOver = true;
+      finishTurnBroadcast(broadcast, startIdx);
+      endGame();
+      return;
+    }
+
+    const extraTurn = (lastIdx === ownStoreOf(player));
+    animating = false;
+
+    if(extraTurn){
+      if(mode==='ai'){
+        messageEl.textContent = (player===1 ? "You landed in your store — go again!" : "AI landed in its store — it goes again!") + captureMsg;
+      } else {
+        messageEl.textContent = "Player " + player + " landed in their store — go again!" + captureMsg;
+      }
+    } else {
+      currentPlayer = player === 1 ? 2 : 1;
+      if(mode==='ai'){
+        messageEl.textContent = (currentPlayer===1 ? "Your turn." : "AI is thinking…") + captureMsg;
+      } else {
+        messageEl.textContent = "Player " + currentPlayer + "'s turn." + captureMsg;
+      }
+    }
+    updateStatus();
+    render();
+    finishTurnBroadcast(broadcast, startIdx);
+  }
+
+  function finishTurnBroadcast(broadcast, startIdx){
+    if(mode==='online' && broadcast && roomRef){
+      const newMoveId = lastSeenMoveId + 1;
+      lastSeenMoveId = newMoveId;
+      roomRef.update({
+        board: board,
+        currentPlayer: currentPlayer,
+        gameOver: gameOver,
+        moveId: newMoveId,
+        lastMove: { startIdx: startIdx },
+        movedByClient: myClientToken
+      });
+    }
+  }
+
+  function endGame(){
+    gameOver = true;
+    const s1 = board[P1_STORE];
+    const s2 = board[P2_STORE];
+    let title;
+    if(s1 === s2) title = "It's a Tie!";
+    else if(s1 > s2) title = "Player 1 Wins!";
+    else title = "Player 2 Wins!";
+    const sub = "Player 1: " + s1 + "  \u2014  Player 2: " + s2;
+    el('overlayTitle').textContent = title;
+    el('overlaySub').textContent = sub;
+    messageEl.textContent = "Game over. " + sub;
+    render();
+    setTimeout(()=>overlay.classList.add('show'), 250);
+  }
+
+  function resetLocalState(){
+    board = freshBoard();
+    currentPlayer = Math.random() < 0.5 ? 1 : 2;
+    gameOver = false;
+    animating = false;
+    overlay.classList.remove('show');
+  }
+
+  // ---------------- click handling ----------------
+  el('board').addEventListener('click', (e)=>{
+    const pitEl = e.target.closest('.pit');
+    if(!pitEl) return;
+    if(gameOver || animating) return;
+    const idx = parseInt(pitEl.dataset.idx);
+    if(!isOwnPit(currentPlayer, idx)) return;
+    if(board[idx] === 0) return;
+    if((mode==='online' || mode==='ai') && myRole !== currentPlayer) return;
+    sow(idx, mode==='online').then(()=>{ maybeTriggerAI(); });
+  });
+
+  el('resetBtn').addEventListener('click', startNewGame);
+  el('overlayResetBtn').addEventListener('click', startNewGame);
+  el('leaveBtn').addEventListener('click', leaveRoom);
+
+  function startNewGame(){
+    resetLocalState();
+    render();
+    updateStatus();
+    if(mode==='online'){
+      messageEl.textContent = "New game started — Player " + currentPlayer + " goes first.";
+    } else if(mode==='ai'){
+      messageEl.textContent = currentPlayer===1
+        ? "You go first — choose a pit on your side to sow."
+        : "AI goes first…";
+    } else {
+      messageEl.textContent = "Player " + currentPlayer + " goes first — choose a pit on your side to sow.";
+    }
+    if(mode==='online' && roomRef){
+      lastSeenMoveId = lastSeenMoveId + 1;
+      roomRef.update({
+        board: board, currentPlayer: currentPlayer, gameOver: false,
+        moveId: lastSeenMoveId, lastMove: null, movedByClient: myClientToken
+      });
+    }
+    if(mode==='ai') maybeTriggerAI();
+  }
+
+  function leaveRoom(){
+    if(roomRef){
+      const slotPath = myRole === 1 ? 'players/p1Token' : (myRole === 2 ? 'players/p2Token' : null);
+      if(slotPath){
+        const slotRef = roomRef.child(slotPath);
+        slotRef.onDisconnect().cancel();
+        slotRef.set(null);
+      }
+      roomRef.off();
+    }
+    roomRef = null; roomId = null; mode = null;
+    el('board').classList.remove('flipped');
+    showPlayArea(false);
+    lobbyError.style.display = 'none';
+  }
+
+  // ---------------- local mode ----------------
+  el('localBtn').addEventListener('click', ()=>{
+    mode = 'local';
+    myRole = 1;
+    resetLocalState();
+    showPlayArea(true);
+    applyBoardOrientation();
+    render();
+    updateStatus();
+    messageEl.textContent = "Player " + currentPlayer + " goes first — choose a pit on your side to sow.";
+  });
+
+  // ---------------- vs AI mode ----------------
+  el('aiBtn').addEventListener('click', ()=>{
+    mode = 'ai';
+    myRole = 1;
+    resetLocalState();
+    showPlayArea(true);
+    applyBoardOrientation();
+    render();
+    updateStatus();
+    messageEl.textContent = currentPlayer===1
+      ? "You go first — choose a pit on your side to sow."
+      : "AI goes first…";
+    maybeTriggerAI();
+  });
+
+  // Kicks off the AI's move whenever it's Player 2's turn in ai mode.
+  function maybeTriggerAI(){
+    if(mode==='ai' && !gameOver && !animating && currentPlayer===2){
+      setTimeout(runAIMove, 550);
+    }
+  }
+
+  function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+  async function runAIMove(){
+    if(mode!=='ai' || gameOver || animating || currentPlayer!==2) return;
+    await sleep(10); // let the "AI is thinking…" UI paint before the blocking search runs
+    const move = aiChooseMove(board.slice(), 2, AI_CONFIG);
+    if(move === -1) return;
+    const pitEl = document.querySelector('.pit[data-idx="'+move+'"]');
+    if(pitEl) pitEl.classList.add('move-picked');
+    await sleep(700); // give the player a moment to see which pit the AI picked before it sows
+    if(pitEl) pitEl.classList.remove('move-picked');
+    await sow(move, false);
+    maybeTriggerAI(); // handles chained extra turns for the AI
+  }
+
+  // ---------------- online mode ----------------
+  function generateRoomCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = '';
+    for(let i=0;i<5;i++) out += chars[Math.floor(Math.random()*chars.length)];
+    return out;
+  }
+
+  function showLobbyError(msg){
+    lobbyError.textContent = msg;
+    lobbyError.style.display = 'block';
+  }
+
+  async function enterRoom(code){
+    if(!FIREBASE_READY){
+      setupWarning.style.display = 'block';
+      showLobbyError("Online play isn't configured yet — see the warning below, or use local play.");
+      return;
+    }
+    lobbyError.style.display = 'none';
+    roomId = code.toUpperCase();
+    roomRef = db.ref('rooms/' + roomId);
+
+    let claimedRole = null;
+    let txResult;
+    try{
+      txResult = await roomRef.transaction(current=>{
+        claimedRole = null;
+        if(current === null){
+          claimedRole = 'p1';
+          return {
+            board: freshBoard(),
+            currentPlayer: Math.random() < 0.5 ? 1 : 2,
+            gameOver: false,
+            moveId: 0,
+            lastMove: null,
+            movedByClient: null,
+            players: { p1Token: myClientToken, p2Token: null },
+            createdAt: Date.now()
+          };
+        }
+        if(!current.players) current.players = { p1Token: null, p2Token: null };
+        if(current.players.p1Token === myClientToken){ claimedRole = 'p1'; return current; }
+        if(current.players.p2Token === myClientToken){ claimedRole = 'p2'; return current; }
+        if(!current.players.p1Token){ current.players.p1Token = myClientToken; claimedRole = 'p1'; return current; }
+        if(!current.players.p2Token){ current.players.p2Token = myClientToken; claimedRole = 'p2'; return current; }
+        claimedRole = 'spectator';
+        return current;
+      });
+    }catch(err){
+      console.error(err);
+      showLobbyError("Couldn't reach the online room. Check your Firebase config and internet connection.");
+      return;
+    }
+
+    myRole = claimedRole === 'p1' ? 1 : (claimedRole === 'p2' ? 2 : 'spectator');
+    mode = 'online';
+    lastSeenMoveId = -1;
+
+    // If this browser disconnects (closes tab, loses network), automatically
+    // clear its slot so the other player sees "waiting for opponent" again.
+    if(myRole === 1){
+      roomRef.child('players/p1Token').onDisconnect().set(null);
+    } else if(myRole === 2){
+      roomRef.child('players/p2Token').onDisconnect().set(null);
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', roomId);
+    window.history.replaceState({}, '', url.toString());
+
+    el('roomCodeLabel').textContent = roomId;
+    showPlayArea(true);
+    roomBar.style.display = 'flex';
+    applyBoardOrientation();
+
+    roomRef.on('value', handleSnapshot);
+  }
+
+  function refreshMessage(bothPresent){
+    if(gameOver) return;
+    if(!bothPresent){
+      messageEl.textContent = "Share the room code — waiting for your friend to join.";
+    } else if(myRole === 'spectator'){
+      messageEl.textContent = "Spectating — Player " + currentPlayer + "'s turn.";
+    } else if(myRole === currentPlayer){
+      messageEl.textContent = "Your turn.";
+    } else {
+      messageEl.textContent = "Waiting for the other player…";
+    }
+  }
+
+  // Highlights the pit the opponent picked, pauses briefly so it's visible,
+  // then replays the move locally (mirrors the AI's own move reveal).
+  async function replayRemoteMove(startIdx, data){
+    const pitEl = document.querySelector('.pit[data-idx="'+startIdx+'"]');
+    if(pitEl) pitEl.classList.add('move-picked');
+    await sleep(700);
+    if(pitEl) pitEl.classList.remove('move-picked');
+    await sow(startIdx, false);
+    board = data.board.slice();
+    currentPlayer = data.currentPlayer;
+    gameOver = data.gameOver;
+    render();
+    updateStatus();
+  }
+
+  function handleSnapshot(snapshot){
+    const data = snapshot.val();
+    if(!data) return;
+
+    const bothPresent = !!(data.players && data.players.p1Token && data.players.p2Token);
+    el('waitingNote').textContent = bothPresent ? '' : 'Waiting for opponent to join…';
+
+    if(data.moveId !== lastSeenMoveId){
+      const prev = lastSeenMoveId;
+      lastSeenMoveId = data.moveId;
+
+      if(prev === -1){
+        board = data.board.slice();
+        currentPlayer = data.currentPlayer;
+        gameOver = data.gameOver;
+        overlay.classList.remove('show');
+        render();
+        updateStatus();
+        refreshMessage(bothPresent);
+        if(gameOver) endGame();
+      } else if(data.movedByClient && data.movedByClient !== myClientToken && data.lastMove){
+        replayRemoteMove(data.lastMove.startIdx, data);
+      } else {
+        board = data.board.slice();
+        currentPlayer = data.currentPlayer;
+        gameOver = data.gameOver;
+        overlay.classList.remove('show');
+        render();
+        updateStatus();
+        if(!data.lastMove){
+          messageEl.textContent = "New game started — Player " + currentPlayer + " goes first.";
+        }
+        if(gameOver) endGame();
+      }
+    } else if(!animating){
+      render();
+      updateStatus();
+      refreshMessage(bothPresent);
+    }
+  }
+
+  el('createBtn').addEventListener('click', ()=>{
+    if(!FIREBASE_READY){ setupWarning.style.display = 'block'; showLobbyError("Online play isn't configured yet — see the warning below, or use local play."); return; }
+    enterRoom(generateRoomCode());
+  });
+  el('joinBtn').addEventListener('click', ()=>{
+    const code = el('joinCodeInput').value.trim();
+    if(!code){ showLobbyError("Enter a room code first."); return; }
+    enterRoom(code);
+  });
+  el('joinCodeInput').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') el('joinBtn').click();
+  });
+  el('copyLinkBtn').addEventListener('click', ()=>{
+    navigator.clipboard.writeText(window.location.href).then(()=>{
+      el('copyLinkBtn').textContent = 'Copied!';
+      setTimeout(()=>{ el('copyLinkBtn').textContent = 'Copy Invite Link'; }, 1500);
+    });
+  });
+
+  // auto-join if a room code is in the URL
+  (function autoJoinFromUrl(){
+    if(!FIREBASE_READY) return;
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room');
+    if(roomParam){
+      el('joinCodeInput').value = roomParam;
+      enterRoom(roomParam);
+    }
+  })();
+
+  if(!FIREBASE_READY){
+    // Leave the warning hidden until they actually try online play,
+    // so local play still feels like the default, friction-free option.
+  }
+})();
+</script>
+
+<footer>
+    <p>&copy; 2026 | Developed by <a href="https://github.com/maruffhasan/" target="_blank" rel="noopener noreferrer" style="color: #c2bebd; font-weight: bold;">Maruf Hasan</a></p>
+</footer>
+
+
+</body>
+</html>
