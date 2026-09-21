@@ -247,17 +247,17 @@ bool is_solvable(vector<vector<int>> &grid) {
         }
     }
 
-    // count is even.
-    if (n % 2 == 1) {
+    
+    if (n % 2 == 1) {                                 // n odd & inversion count even -> return true
         return inversions % 2 == 0;
     } 
-    else {
+    else {                                            // n even
         int blank_row_from_buttom = n - blank_row;
         if (blank_row_from_buttom % 2 == 1) {
-            return inversions % 2 == 0;
+            return inversions % 2 == 0;               // blank is on odd position from buttom & inversion count is even -> return true
         }
         else {
-            return inversions % 2 == 1;
+            return inversions % 2 == 1;               // blank is on even position from buttom & inversion count is odd -> return true
         }
     }
 }
